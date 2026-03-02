@@ -19,22 +19,22 @@ Conçu pour envoyer rapidement des invitations calendrier personnalisées (relan
 
 ## Architecture globale
 ```
-┌──────────────────────────────┐       ┌──────────────────────────┐
-│       Frontend (Next.js)     │       │    Backend (NestJS)      │
-│          :3000               │       │        :3001             │
-│                              │       │                          │
-│  app/                        │  POST │  src/                    │
-│  ├── page.tsx (accueil)      │ ───── │  ├── main.ts             │
-│  ├── dashboard/              │  /cal │  ├── app.module.ts       │
-│  │   └── page.tsx (formulaire│ endar │  ├── app.controller.ts   │
-│  └── api/                    │ /bulk │  └── app.service.ts      │
-│      ├── auth/[...nextauth]/ │       │                          │
-│      │   ├── authOptions.ts  │       │  → Google Calendar API   │
-│      │   └── route.ts        │       │                          │
-│      └── calendar/           │       └──────────────────────────┘
-│          └── bulk-create/    │
-│              └── route.ts    │
-└──────────────────────────────┘
+┌───────────────────────────────┐                   ┌──────────────────────────┐
+│       Frontend (Next.js)      │                   │    Backend (NestJS)      │
+│          :3000                │                   │        :3001             │
+│                               │                   │                          │
+│  app/                         │  POST             │  src/                    │
+│  ├── page.tsx (accueil)       │ ───────────────── │  ├── main.ts             │
+│  ├── dashboard/               │  /calendar/bulk   │  ├── app.module.ts       │
+│  │   └── page.tsx (formulaire │                   │  ├── app.controller.ts   │
+│  └── api/                     │                   │  └── app.service.ts      │
+│      ├── auth/[...nextauth]/  │                   │                          │
+│      │   ├── authOptions.ts   │                   │  → Google Calendar API   │
+│      │   └── route.ts         │                   │                          │
+│      └── calendar/            │                   └──────────────────────────┘
+│          └── bulk-create/     │
+│              └── route.ts     │
+└───────────────────────────────┘
 ```
 
 **Flux de données :**
