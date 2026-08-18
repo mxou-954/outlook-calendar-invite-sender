@@ -52,6 +52,18 @@ export class AppService {
       };
     }
 
+    if (!titleTemplate || !descriptionTemplate) {
+      return { error: 'titleTemplate et descriptionTemplate sont obligatoires' };
+    }
+
+    if (!startISO || !endISO) {
+      return { error: 'startISO et endISO sont obligatoires' };
+    }
+
+    if (!tokens?.access_token && !tokens?.refresh_token) {
+      return { error: 'Aucun token Google fourni' };
+    }
+
     const auth = this.oauthClientFromTokens(tokens);
     const calendar = google.calendar({ version: 'v3', auth });
 
@@ -64,36 +76,51 @@ export class AppService {
       const summary = this.renderTemplate(titleTemplate, v);
       const description = this.renderTemplate(descriptionTemplate, v);
 
-      const tokenInfo = await auth.getTokenInfo(tokens.access_token!);
-      console.log('TOKENINFO scopes:', tokenInfo.scopes);
-
-      const res = await calendar.events.insert({
-        calendarId,
-        sendUpdates: 'all',
-        requestBody: {
-          summary,
-          description,
-          start: {
-            dateTime: startISO,
-            timeZone: 'Europe/Paris',
+      // Un échec sur un destinataire ne doit pas interrompre tout le lot.
+      try {
+        const res = await calendar.events.insert({
+          calendarId,
+          sendUpdates: 'all',
+          requestBody: {
+            summary,
+            description,
+            start: {
+              dateTime: startISO,
+              timeZone: 'Europe/Paris',
+            },
+            end: {
+              dateTime: endISO,
+              timeZone: 'Europe/Paris',
+            },
+            attendees: [{ email }],
           },
-          end: {
-            dateTime: endISO,
-            timeZone: 'Europe/Paris',
-          },
-          attendees: [{ email }],
-        },
-      });
+        });
 
-      results.push({
-        recipient: email,
-        variable: v,
-        eventId: res.data.id,
-        htmlLink: res.data.htmlLink,
-        status: res.data.status,
-      });
+        results.push({
+          recipient: email,
+          variable: v,
+          ok: true,
+          eventId: res.data.id,
+          htmlLink: res.data.htmlLink,
+          status: res.data.status,
+        });
+      } catch (e: any) {
+        const message =
+          e?.response?.data?.error?.message ?? e?.message ?? String(e);
+        console.error(`Echec pour ${email}:`, message);
+
+        results.push({
+          recipient: email,
+          variable: v,
+          ok: false,
+          error: message,
+        });
+      }
     }
 
-    return { ok: true, created: results.length, results };
+    const created = results.filter((r) => r.ok).length;
+    const failed = results.length - created;
+
+    return { ok: failed === 0, created, failed, results };
   }
 }

@@ -15,6 +15,22 @@ function requireStringArray(x: any, name: string) {
   return arr;
 }
 
+function isEmail(x: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(x);
+}
+
+// Format attendu par Google quand on precise timeZone : "2025-03-15T10:00:00"
+// (heure locale, sans decalage). On evite ainsi la double conversion.
+function toLocalDateTime(d: Date) {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}` +
+    `T${p(d.getHours())}:${p(d.getMinutes())}:00`
+  );
+}
+
+const BACK_URL = process.env.BACK_URL ?? "http://localhost:3001";
+
 export async function POST(req: Request) {
   try {
     const session: any = await getServerSession(authOptions);
@@ -42,6 +58,14 @@ export async function POST(req: Request) {
       );
     }
 
+    const invalidEmails = recipients.filter((e) => !isEmail(e));
+    if (invalidEmails.length > 0) {
+      return NextResponse.json(
+        { error: "Adresses email invalides", invalidEmails },
+        { status: 400 },
+      );
+    }
+
     const titleTemplate = requireString(body.titleTemplate, "titleTemplate");
     const descriptionTemplate = requireString(
       body.descriptionTemplate,
@@ -57,22 +81,29 @@ export async function POST(req: Request) {
     }
 
     const startDate = new Date(startLocal);
+    if (Number.isNaN(startDate.getTime())) {
+      return NextResponse.json(
+        { error: "startLocal invalide" },
+        { status: 400 },
+      );
+    }
     const endDate = new Date(startDate.getTime() + durationMin * 60 * 1000);
 
     const payload = {
       tokens: { access_token, refresh_token },
       titleTemplate,
       descriptionTemplate,
-      startISO: startDate.toISOString(),
-      endISO: endDate.toISOString(),
+      startISO: toLocalDateTime(startDate),
+      endISO: toLocalDateTime(endDate),
       recipients,
       variables,
     };
 
-    const r = await fetch("http://localhost:3001/calendar/bulk", {
+    const r = await fetch(`${BACK_URL}/calendar/bulk`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(120000),
     });
 
     const text = await r.text();
@@ -87,6 +118,18 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ status: r.status, data }, { status: r.status });
   } catch (e: any) {
+    if (e?.name === "TimeoutError" || e?.name === "AbortError") {
+      return NextResponse.json(
+        { error: `Le backend (${BACK_URL}) n'a pas répondu à temps` },
+        { status: 504 },
+      );
+    }
+    if (e?.cause?.code === "ECONNREFUSED") {
+      return NextResponse.json(
+        { error: `Backend injoignable sur ${BACK_URL}. Est-il démarré ?` },
+        { status: 502 },
+      );
+    }
     return NextResponse.json(
       { error: e?.message ?? String(e) },
       { status: 500 },

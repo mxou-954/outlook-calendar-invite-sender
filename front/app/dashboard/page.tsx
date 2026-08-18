@@ -9,6 +9,10 @@ function splitLines(s: string) {
     .filter(Boolean);
 }
 
+function isEmail(x: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(x);
+}
+
 export default function TestPage() {
   const [recipientsRaw, setRecipientsRaw] = useState("");
   const [varsRaw, setVarsRaw] = useState("");
@@ -22,12 +26,19 @@ export default function TestPage() {
   const [loading, setLoading] = useState(false);
   const recipients = useMemo(() => splitLines(recipientsRaw), [recipientsRaw]);
   const vars = useMemo(() => splitLines(varsRaw), [varsRaw]);
-  const countOk = recipients.length > 0 && recipients.length === vars.length;
+  const badEmails = useMemo(
+    () => recipients.filter((e) => !isEmail(e)),
+    [recipients],
+  );
+  const countOk =
+    recipients.length > 0 &&
+    recipients.length === vars.length &&
+    badEmails.length === 0;
 
   const submit = async () => {
     setResult(null);
 
-    if (!countOk) {
+    if (recipients.length === 0 || recipients.length !== vars.length) {
       setResult({
         error:
           "La liste de destinataires et la liste de variables doivent avoir la même longueur (et non vide).",
@@ -36,8 +47,16 @@ export default function TestPage() {
       });
       return;
     }
+    if (badEmails.length > 0) {
+      setResult({ error: "Adresses email invalides", badEmails });
+      return;
+    }
     if (!startLocal) {
       setResult({ error: "Choisis un jour/heure de début." });
+      return;
+    }
+    if (!Number.isFinite(durationMin) || durationMin <= 0) {
+      setResult({ error: "La durée doit être un nombre de minutes positif." });
       return;
     }
 
@@ -162,7 +181,11 @@ export default function TestPage() {
             >
               {countOk
                 ? `Parfait ! ${recipients.length} paires destinataire/variable détectées`
-                : "Le nombre de destinataires doit correspondre au nombre de variables"}
+                : badEmails.length > 0 &&
+                    recipients.length === vars.length &&
+                    recipients.length > 0
+                  ? `Adresse(s) email invalide(s) : ${badEmails.join(", ")}`
+                  : "Le nombre de destinataires doit correspondre au nombre de variables"}
             </p>
           </div>
         </div>
